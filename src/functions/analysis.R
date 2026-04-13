@@ -7,7 +7,9 @@ linear_no_control <- with(imputed, lm(cesd_2023 ~ highest_degree_2021))
 # Pool results
 pooled_results_no_control <- pool(linear_no_control)
 summary(pooled_results_no_control)
-glimpse(pooled_results_no_control)
+
+library(broom)
+tidy(pooled_results_no_control)
 
 # Model 2: OLS with controls
 linear_control <- with(imputed, lm(cesd_2023 ~ 
@@ -31,7 +33,7 @@ linear_control <- with(imputed, lm(cesd_2023 ~
 # Pool results
 pooled_results_control <- pool(linear_control)
 summary(pooled_results_control)
-glimpse(pooled_results_control)
+tidy(pooled_results_control)
 
 # Check linear regression assumptions
 
@@ -44,4 +46,4 @@ iv <- with(imputed, ivreg(cesd_2023 ~ highest_degree_2021 | cognitive_pct_1997))
 # Pool results
 pooled_results_iv <- pool(iv)
 summary(pooled_results_iv)
-glimpse(pooled_results_iv)
+tidy(pooled_results_iv)
