@@ -1,0 +1,763 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+  12pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\usepackage{geometry}
+\geometry{letterpaper, margin=1in}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage{amsmath, amssymb}
+\usepackage{caption}
+\captionsetup{labelsep=period}
+\usepackage{float}
+\floatplacement{figure}{H}
+\floatplacement{table}{H}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\newcolumntype{d}[1]{D{.}{.}{#1}}
+\usepackage[pagebackref=false]{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+\usepackage{placeins}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{tabularray}
+\usepackage[normalem]{ulem}
+\usepackage{graphicx}
+\usepackage{rotating}
+\UseTblrLibrary{siunitx}
+\NewTableCommand{\tinytableDefineColor}[3]{\definecolor{#1}{#2}{#3}}
+\newcommand{\tinytableTabularrayUnderline}[1]{\underline{#1}}
+\newcommand{\tinytableTabularrayStrikeout}[1]{\sout{#1}}
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Educational Attainment and Adult Depression},
+  pdfauthor={Raine Zhuang},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Educational Attainment and Adult Depression}
+\author{Raine Zhuang}
+\date{2026-04-19}
+
+\begin{document}
+\maketitle
+
+\vspace{0.5in}
+
+\begin{center}
+\large
+\textbf{Educational Attainment and Adult Depression}
+\end{center}
+
+\vspace{0.25in}
+
+\begin{center}
+Raine Zhuang
+\end{center}
+
+\vspace{0.25in}
+
+\begin{center}
+\date{\today}
+\end{center}
+
+\vspace{0.5in}
+
+\begin{abstract}
+\noindent This article examines how educational attainment shapes depressive symptoms in middle-age adulthood. Based on data from the NLSY97 dataset and OLS regressions with extensive controls, individuals with higher educational attainment exhibit fewer depressive symptoms.
+
+\vspace{0.25in}
+\noindent \textbf{Keywords:} Educational Attainment, Depressive Symptoms
+\end{abstract}
+
+\newpage
+
+\section{I. Introduction}\label{i.-introduction}
+
+Depression is one of the leading causes of disease burden in high-income
+countries, affecting nearly one in three U.S. adults over their lifetime
+(Kessler et al., 2012). The economic costs are substantial, with lost
+productivity and healthcare expenses totaling hundreds of billions
+annually. If educational attainment can reduce depressive symptoms, then
+policies that expand college access may generate meaningful mental
+health benefits alongside their well-documented economic returns.
+
+Past literatures have shown that individuals with higher levels of
+education report fewer depressive symptoms (Lorant et al., 2003;
+Mirowsky and Ross, 2003). However, it remains unclear whether this
+relationship is causal. The same characteristics that predict college
+completion---cognitive ability, family support, good adolescent mental
+health---also predict lower depression in adulthood. If these unobserved
+factors explain the association, then policies promoting college
+enrollment may not provide the expected mental health benefits.
+
+This study examines whether completing a college degree is associated
+with lower depressive symptoms in a nationally representative U.S.
+sample. Based on data from this National Longitudinal Survey of Youth
+1997 (NLSY97) and ordinary least squares regression (OLS regression)
+with extensive controls, college graduates report fewer depressive
+symptoms than non-graduates on average. The estimated association
+(-0.770 on a 21-point CES-D scale) is robust to the inclusion of
+exogenous controls and is substantially attenuated when post-treatment
+mediators (employment, income, health) are added, suggesting that
+education's protective effect operates largely through labor market and
+health pathways. While causal claims require additional testing and
+stronger identification, the results are consistent with education
+having a protective effect on mental health.
+
+\section{II. Background}\label{ii.-background}
+
+A large body of research documents that individuals with higher levels
+of educational attainment report fewer depressive symptoms (Lorant et
+al., 2003; Mirowsky and Ross, 2003; Miech et al., 2005; Quesnel-Vallée
+and Taylor, 2012). This inverse association is remarkably consistent
+across U.S. and international samples, leading many scholars to
+conceptualize education as a protective factor against depression.
+
+However, the policy relevance of the education--depression relationship
+depends on whether it represents a causal effect or merely a correlation
+driven by unobserved selection factors. The concern is that the same
+individual characteristics that predict educational
+attainment---cognitive ability, conscientiousness, supportive families,
+good adolescent mental health---also predict lower depression in
+adulthood. If these unmeasured confounders explain the association, then
+policies that increase college enrollment may not generate the expected
+mental health benefits.
+
+Recent studies have addressed the confounder problem using various
+identification strategies. Using propensity score matching, Bauldry
+(2015) found that college completion protects against depressive
+symptoms. Mezuk, Myers, and Kendler (2012) employed a genetically
+informed twin design and found that education and depression share a
+common genetic cause. McFarland and Wagner (2015) used a monozygotic
+twin discordant design and found that having a college degree was
+associated with 0.90 fewer depressive symptoms on a 12-point CES-D
+scale. However, their estimate comes from a small sample of twin pairs,
+raising concerns about external validity. In addition, twins may not
+represent the general population, as they differ in birth weight, early
+treatment by parents, and social experiences (Felson, 2014).
+
+The current study builds upon McFarland and Wagner (2015). The choice of
+most controls in this study (e.g., cognitive ability, personality)
+aligns with that in the McFarland and Wagner paper. Unlike their paper,
+NLSY97, a large and nationally representative dataset, was used. Also,
+the depressive outcome investigated is on adults aged 38-43, a life
+stage where returns to education may be more fully realized. Lastly,
+pathways between educational attainment and depressive symptoms are
+investigated.
+
+\section{III. Data}\label{iii.-data}
+
+\subsection{A. Data Source and Sample}\label{a.-data-source-and-sample}
+
+This study uses data from the National Longitudinal Survey of Youth 1997
+(NLSY97), a nationally representative survey of U.S. individuals born
+between 1980 and 1984 conducted by the Bureau of Labor Statistics. The
+baseline interview in 1997 included 8,984 respondents aged 12-17, who
+have been followed through adulthood. The outcome variable is drawn from
+the 2023 interview wave (respondents aged 38-43).
+
+\subsection{B. Variables}\label{b.-variables}
+
+\textbf{Outcome variable.} Depressive symptoms are measured using the
+7-item Center for Epidemiologic Studies Depression Scale (CES-D) from
+the 2023 wave. Items are summed to create a continuous score ranging
+from 0 to 21, where higher values indicate more severe depressive
+symptoms (Radloff, 1977).
+
+\textbf{Main predictor.} Educational attainment is measured as the
+highest degree completed by 2021. Based on previous literature (Bauldry,
+2015), this variable is collapsed into a binary indicator: High Degree
+(college degree or higher) versus Low Degree (lower than a college
+degree), coded as 1 and 0 respectively.
+
+\textbf{Control variables.} All controls, except for age, are measured
+prior to 2023. These include sex (binary), age (continuous), parental
+education (continuous), race (White vs.~non-White), negative peer
+influence (binary), urban residence (binary), personality traits
+(neuroticism, openness, extraversion), employment status (binary),
+partnership status (binary), log income, and cognitive ability.
+Cognitive ability is measured by the ASVAB math-verbal percentile score,
+administered in 1997 (ages 12-17). The raw score (0-100,000) is
+converted to a 0-100 scale by dividing by 1000.
+
+Table 1 presents summary statistics for the variables in the analytic
+sample.
+
+\FloatBarrier
+\begin{table}[!h]
+\centering
+\caption{\label{tab:summary-stats}Summary Statistics for Main Variables}
+\centering
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\begin{tabular}[t]{lrrrrr}
+\toprule
+Variable & Mean / \% & SD & Min & Max & N\\
+\midrule
+CES-D Score (2023) & 3.26 & 4.11 & 0 & 21.00 & 6525\\
+College Degree or Higher & 41.00 & 49.00 & 0 & 1.00 & 6687\\
+Cognitive Ability (ASVAB percentile) & 45.32 & 29.17 & 0 & 100.00 & 7093\\
+Female & 49.00 & 50.00 & 0 & 1.00 & 8984\\
+Age (2023) & 40.84 & 1.47 & 38 & 44.00 & 6569\\
+\addlinespace
+White & 52.00 & 50.00 & 0 & 1.00 & 8984\\
+Urban (1997) & 76.00 & 42.00 & 0 & 1.00 & 8604\\
+Parental Education (years) & 13.24 & 4.31 & 1 & 95.00 & 8507\\
+Negative Peer Influence (1997) & 60.00 & 49.00 & 0 & 1.00 & 8878\\
+Prior Depression (CES-D 2019) & 3.01 & 3.87 & 0 & 21.00 & 6864\\
+\addlinespace
+Employed (2021) & 80.00 & 40.00 & 0 & 1.00 & 6593\\
+Has Partner (2021) & 60.00 & 49.00 & 0 & 1.00 & 6674\\
+Log Income (2022) & 10.80 & 1.24 & 0 & 12.94 & 5188\\
+Extraversion (2008) & 5.29 & 1.38 & 1 & 7.00 & 7363\\
+Openness (2008) & 5.74 & 1.26 & 1 & 7.00 & 7410\\
+\addlinespace
+Neuroticism (2008) & 5.47 & 1.39 & 1 & 7.00 & 7427\\
+Self-rated Health (2021) & 2.44 & 0.99 & 1 & 5.00 & 6705\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\FloatBarrier
+
+\emph{Notes:} \emph{CES-D scores range from 0 to 21, with higher scores
+indicating more depressive symptoms. For binary variables (College
+Degree, Female, White, Urban, Negative Peer Influence, Employed, Has
+Partner), the mean is presented as a percentage. ASVAB scores are
+percentile-ranked from 0 to 100. N \textgreater{} 8,000 respondents
+after multiple imputation.}
+
+The average 2023 CES-D score is 3.26 (SD = 4.11) on a 0-21 scale,
+indicating relatively low levels of depressive symptoms in this sample
+of adults. Approximately 41.0\% of respondents have completed a college
+degree or higher. The sample is 49.0\% female and 52.0\% White, with an
+average age of 40.8 years. Cognitive ability (ASVAB percentile) averages
+45.3, and prior depressive symptoms (CES-D 2019) average 3.01. Most
+respondents are employed (80.0\%) and live with a partner (60.0\%).
+
+\subsection{C. Missing Data}\label{c.-missing-data}
+
+Variables with no or minimal missingness are retained without
+imputation. For all other variables, multiple imputation using chained
+equations (MICE) is employed. Five imputed datasets are generated, and
+results are pooled using Rubin's rules (Rubin, 1987).
+
+\section{IV. Empirical Strategy}\label{iv.-empirical-strategy}
+
+To estimate the association between educational attainment and
+depressive symptoms, three ordinary least squares (OLS) regression
+models are used.
+
+\subsection{A. Baseline Model}\label{a.-baseline-model}
+
+The baseline specification is:
+
+\[ CESD_i = \beta_0 + \beta_1 HighDegree_i + \varepsilon_i \]
+
+where \(CESD_i\) is the CES-D depression score for respondent \(i\), and
+\(HighDegree_i\) is an indicator equal to 1 if the respondent has
+completed a college degree or higher. The coefficient \(\beta_1\)
+estimates the difference in mean depressive symptoms between college
+graduates and non-graduates.
+
+\subsection{B. Model with Exogenous
+Controls}\label{b.-model-with-exogenous-controls}
+
+To address omitted variable bias, a second model is used:
+
+\[ CESD_i = \beta_0 + \beta_1 HighDegree_i + \mathbf{X_i}\gamma + \varepsilon_i \]
+
+where \(\mathbf{X_i}\) includes demographic characteristics,
+socioeconomic background, adolescent peer environment, cognitive
+ability, and personality traits.
+
+\subsection{C. Model with Full
+Controls}\label{c.-model-with-full-controls}
+
+To investigate pathways between college completion and depressive
+symptoms, a third model is used:
+
+\[ CESD_i = \beta_0 + \beta_1 HighDegree_i + \mathbf{X_i}\gamma + \mathbf{Z_i}\alpha + \varepsilon_i \]
+
+where \(\mathbf{Z_i}\) includes prior depressive symptoms (CES-D 2019),
+employment status, partnership status, log income, and self-rated
+health.
+
+\subsection{D. Identification
+Assumptions}\label{d.-identification-assumptions}
+
+Consistent estimation of \(\beta_1\) requires several assumptions.
+First, across all three models, a linear relationship between education
+and depression, as in the McFarland and Wagner paper, is assumed.
+Second, conditional independence assumes no unmeasured confounders after
+conditioning on controls. This is made plausible by including controls
+like cognitive ability, personality, and prior depressive symptoms
+(McFarland and Wagner, 2015). Third, exogeneity of controls requires
+that controls are not themselves outcomes of education. I therefore
+present models with and without post-treatment controls (Angrist and
+Pischke, 2009). Fourth, variance inflation factors (VIF) in Table 2 are
+all below 5, indicating no severe multicollinearity. Lastly, diagnostic
+plots in Figure 1 show no systematic patterns, and
+heteroskedasticity-robust standard errors are reported throughout.
+
+Table 2 reports variance inflation factors for the full controls model
+to assess multicollinearity.
+
+\FloatBarrier
+\begin{table}[!h]
+\centering
+\caption{\label{tab:vif-table}Variance Inflation Factors}
+\centering
+\begin{tabular}[t]{llr}
+\toprule
+  & Variable & VIF\\
+\midrule
+highest\_degree\_2021 & College Degree or Higher & 1.45\\
+cognitive\_pct\_1997 & Cognitive Ability (ASVAB) & 1.62\\
+female\_1997 & Female & 1.09\\
+age\_2023 & Age & 1.24\\
+white\_1997 & White & 1.35\\
+\addlinespace
+urban\_1997 & Urban & 1.08\\
+parent\_edu\_1997 & Parental Education & 1.14\\
+peer\_negative\_1997 & Negative Peer Influence & 1.27\\
+health\_2021 & Self-rated Health & 1.15\\
+cesd\_2019 & Prior Depression (2019) & 1.17\\
+\addlinespace
+employed\_2021 & Employed & 1.22\\
+has\_partner\_2021 & Has Partner & 1.10\\
+log\_income\_2022 & Log Income & 1.27\\
+extraversion\_2008 & Extraversion & 1.13\\
+openess\_2008 & Openness & 1.10\\
+\addlinespace
+neuroticism\_2008 & Neuroticism & 1.15\\
+\bottomrule
+\end{tabular}
+\end{table} \FloatBarrier
+
+\emph{Notes:} \emph{VIF values below 5 indicate no severe
+multicollinearity. All variables fall well below this threshold.}
+
+Figure 1 shows the residuals versus fitted values plot and Q-Q plot of
+residuals for the no control model.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=5in]{report_files/figure-latex/diagnostic-plots-1} 
+
+}
+
+\caption{Residuals vs Fitted Plot and Q-Q Plot}\label{fig:diagnostic-plots}
+\end{figure}
+
+\emph{Notes:} \emph{In the residuals versus fitted values plot, the
+horizontal line at zero represents perfect prediction. No systematic
+pattern is visible, supporting the assumptions of linearity and
+homoskedasticity. In the Q-Q plot, points along the diagonal line
+indicate normally distributed residuals. Mild deviations in the lower
+and upper tail are expected given the bounded 0--21 range of the CES-D
+scale.}
+
+\section{V. Results}\label{v.-results}
+
+\subsection{A. Main Findings}\label{a.-main-findings}
+
+Table 3 presents OLS regression results for the association between
+college completion and depressive symptoms across three models.
+
+\FloatBarrier
+\begin{table}
+\centering
+\begin{talltblr}[         %% tabularray outer open
+caption={OLS Regression Results for Depressive Symptoms (CES-D 2023)},
+note{}={* p \num{< 0.05}, ** p \num{< 0.01}, *** p \num{< 0.001}},
+note{ }={Heteroskedasticity-robust standard errors in parentheses. *** p < 0.001, ** p < 0.01, * p < 0.05. Results pooled across 5 imputed datasets using Rubin's rules.},
+]                     %% tabularray outer close
+{                     %% tabularray inner open
+colspec={Q[]Q[]Q[]Q[]},
+hline{2}={1-4}{solid, black, 0.05em},
+hline{34}={1-4}{solid, black, 0.05em},
+hline{1}={1-4}{solid, black, 0.08em},
+hline{37}={1-4}{solid, black, 0.08em},
+column{2-4}={}{halign=c},
+column{1}={}{halign=l},
+}                     %% tabularray inner close
+& No Controls & Pre-treatment Controls & Post-treatment Controls \\
+College Degree or Higher & \num{-0.689}*** & \num{-0.770}*** & \num{-0.161} \\
+& (\num{0.112}) & (\num{0.128}) & (\num{0.115}) \\
+Cognitive Ability (ASVAB) &  & \num{-0.001} & \num{0.004} \\
+&  & (\num{0.002}) & (\num{0.002}) \\
+Female &  & \num{0.906}*** & \num{0.436}*** \\
+&  & (\num{0.093}) & (\num{0.086}) \\
+Age &  & \num{-0.062} & \num{0.003} \\
+&  & (\num{0.034}) & (\num{0.029}) \\
+White &  & \num{0.226}* & \num{0.273}** \\
+&  & (\num{0.102}) & (\num{0.086}) \\
+Urban &  & \num{0.442}*** & \num{0.248}* \\
+&  & (\num{0.109}) & (\num{0.096}) \\
+Parental Education &  & \num{0.041}** & \num{0.026} \\
+&  & (\num{0.014}) & (\num{0.013}) \\
+Negative Peer Influence &  & \num{0.361}** & \num{0.170} \\
+&  & (\num{0.124}) & (\num{0.101}) \\
+Extraversion &  & \num{-0.127}* & \num{-0.036} \\
+&  & (\num{0.047}) & (\num{0.038}) \\
+Openness &  & \num{0.084} & \num{0.066} \\
+&  & (\num{0.058}) & (\num{0.048}) \\
+Neuroticism &  & \num{-0.546}*** & \num{-0.258}*** \\
+&  & (\num{0.042}) & (\num{0.045}) \\
+Self-rated Health &  &  & \num{0.559}*** \\
+&  &  & (\num{0.047}) \\
+Prior Depression (2019) &  &  & \num{0.469}*** \\
+&  &  & (\num{0.012}) \\
+Employed &  &  & \num{-0.508}*** \\
+&  &  & (\num{0.127}) \\
+Has Partner &  &  & \num{-0.135} \\
+&  &  & (\num{0.093}) \\
+Log Income &  &  & \num{-0.064} \\
+&  &  & (\num{0.037}) \\
+Num.Obs. & \num{8943} & \num{8878} & \num{8878} \\
+R2 & \num{0.007} & \num{0.070} & \num{0.312} \\
+R2 Adj. & \num{0.007} & \num{0.068} & \num{0.311} \\
+\end{talltblr}
+\end{table}\FloatBarrier
+
+\emph{Notes:} \emph{The dependent variable is CES-D score (2023),
+ranging from 0 to 21. Model 1 includes no controls. Model 2 adds
+controls that are unlikely to be caused by college completion. Model 3
+adds post-treatment mediators. Heteroskedasticity-robust standard errors
+are in parentheses. Results are pooled across 5 imputed datasets using
+Rubin's rules. *** p \textless{} 0.001, ** p \textless{} 0.01, * p
+\textless{} 0.05.}
+
+\textbf{Model 1 (No Controls).} Having a college degree is associated
+with a 0.689-point lower CES-D score (p \textless{} 0.001). This raw
+association aligns with the established education--depression gradient
+(Mirowsky and Ross, 2003; Lorant et al., 2003).
+
+\textbf{Model 2 (Exogenous Controls).} Adding exogenous controls, the
+education coefficient becomes -0.770 (p \textless{} 0.001). Female
+respondents report CES-D scores 0.906 points higher than males (p
+\textless{} 0.001), consistent with documented gender differences
+(Rosenfield and Mouzon, 2013). Urban residents report higher depressive
+symptoms (0.442 points, p \textless{} 0.001). Negative peer influence
+predicts higher CES-D scores (0.361 points, p \textless{} 0.01).
+Counterintuitively, neuroticism is associated with lower depression
+(-0.546, p \textless{} 0.001). The model explains approximately 7\% of
+the variance (Adjusted R² = 0.068).
+
+\textbf{Model 3 (Full Controls).} Adding post-treatment mediators
+attenuates the education coefficient to -0.161 (not significant). This
+attenuation is expected as these variables lie on the causal pathway.
+Significant coefficients for prior depression (0.469, p \textless{}
+0.001), self-rated health (0.559, p \textless{} 0.001), and employment
+(-0.508, p \textless{} 0.001) suggest these are important mediators. The
+full model explains 31\% of the variance (Adjusted R² = 0.311).
+
+\subsection{B. Interpretation}\label{b.-interpretation}
+
+Two main conclusions emerge.
+
+First, there is a robust negative association between college completion
+and depressive symptoms that persists after controlling for exogenous
+variables. The education coefficient is not sensitive to the inclusion
+of exogenous controls; in fact, its magnitude increases slightly from
+Model 1 to Model 2. This pattern is unusual, since most studies found
+that adding controls attenuates the coefficient (Lee and Yang, 2022;
+McFarland and Wagner, 2015). This stability strengthens confidence that
+the association is not merely an artifact of omitted pre-existing
+differences.
+
+Second, the sharp attenuation in Model 3 indicates that much of the
+education effect operates through post-education pathways such as
+employment and health.
+
+\subsection{C. Comparison with Previous
+Literature}\label{c.-comparison-with-previous-literature}
+
+The education coefficient in Model 2 (-0.770 on a 21-point scale) is
+comparable to McFarland and Wagner's (2015) twin-difference estimate
+(-0.90 on a 12-point scale) when scaled appropriately. Unlike their
+study---which found that adding controls like cognitive ability and
+personality reduced the coefficient by 65\%---my estimates show
+stability across the first two models.
+
+\section{VI. Discussion}\label{vi.-discussion}
+
+\subsection{A. Assessment of Results and
+Assumptions}\label{a.-assessment-of-results-and-assumptions}
+
+The results show that completing a college degree is associated with
+significantly lower depressive symptoms, even after controlling for an
+extensive set of exogeneous characteristics (Model 2: -0.770, p
+\textless{} 0.001). This finding is consistent with the broader
+literature (Mirowsky and Ross, 2003; Lorant et al., 2003; McFarland and
+Wagner, 2015; Bauldry, 2015).
+
+\textbf{Strengths.} The NLSY97 offers two rare advantages. First, the
+inclusion of ASVAB measure of adolescent cognitive ability and
+personality measure addresses key sources of selection bias mentioned in
+the McFarland and Wagner paper. Second, the longitudinal design ensures
+exogeneity of controls (Angrist and Pischke, 2009) and lowers the
+possibility of reverse causality.
+
+\textbf{Weaknesses.} Conditional independence remains untestable.
+Unobserved factors such as childhood trauma or genetic predispositions
+could still bias the estimate. The CES-D scale is self-reported and may
+be subject to reporting bias.
+
+\textbf{Alternative explanations.} One important omitted variable is
+whether individuals have depression or other mental health conditions as
+a child, since this could affect their ability to complete any form of
+education and could also affect their mental health as an adult (both
+directly and indirectly through education).
+
+\subsection{B. Extension: Alternative Identification
+Strategies}\label{b.-extension-alternative-identification-strategies}
+
+While the OLS estimates with extensive controls are informative, they
+cannot rule out all omitted variable biases. Two quasi-experimental
+designs would provide stronger causal evidence.
+
+\textbf{Instrumental Variables.} A natural instrumental variables
+strategy would be using geographic variation in college access. Distance
+to the nearest four-year college or the presence of a local community
+college have been used as instruments for educational attainment (Card,
+1995). These instruments satisfy relevance (proximity reduces tuition
+and commuting costs, increasing college enrollment) and are plausibly
+exogenous, as birth location is largely predetermined and not directly
+linked to adult depression. Implementing this approach would require
+merging NLSY97 geocodes with institutional data from the Integrated
+Postsecondary Education Data System (IPEDS). A significant first-stage
+F-statistic (F \textgreater{} 10) and a null result from an
+overidentification test would strengthen claims of a causal effect.
+
+\textbf{Regression Discontinuity Design.} An alternative approach would
+exploit admission thresholds at selective universities. Many
+institutions admit students based on test score or grade point average
+cutoffs. Students just above and just below these thresholds are
+comparable except for their admission status, creating a natural
+experiment. Comparing depression outcomes for students who marginally
+gained admission versus those who marginally missed admission would help
+identify the causal effect of attending a selective college. This design
+requires data on application outcomes and admission thresholds, which
+are not available in the NLSY97 but could be obtained from institutional
+records or restricted-use survey data.
+
+Both designs offer stronger causal identification than OLS with
+controls. Future work should use these strategies to determine whether
+the protective association investigated here reflects a genuine causal
+effect of college completion on depressive symptoms.
+
+\section{VII. Conclusion}\label{vii.-conclusion}
+
+This study examines whether completing a college degree is associated
+with lower depressive symptoms in a nationally representative U.S.
+sample (NLSY97, ages 35-43). Using OLS regression with extensive
+exogenous controls, I find that college graduates report significantly
+fewer depressive symptoms than non-graduates (coefficient = -0.770, p
+\textless{} 0.001). The estimate is substantially attenuated when
+post-treatment mediators are included, suggesting education's protective
+effect operates largely through labor market outcomes and health status.
+
+\textbf{Limitations and future directions.} Unobserved confounding
+cannot be ruled out, and the instrumental variables method and
+regression discontinuity design method are proposed for future
+investigations. The sample is restricted to a single cohort, so
+replication using NLSY79 or more recent cohorts would assess
+generalizability of this study's findings. Finally, this study does not
+examine heterogeneity by gender, race, or socioeconomic background.
+Given Lee and Yang's (2022) finding that education's mental health
+benefits accrue primarily to women, future research should investigate
+subgroup variation.
+
+\textbf{Policy implications.} If the association is causal, policies
+that expand college access---need-based financial aid, community college
+investments---may generate mental health benefits. Given that employment
+and income are important mediators, policies improving labor market
+outcomes for non-graduates might offer alternative policy levers.
+
+In summary, this study provides evidence that college completion is
+associated with lower depressive symptoms conditional on extensive
+controls.
+
+\newpage
+
+\section{REFERENCES}\label{references}
+
+Angrist, Joshua D., and Jörn-Steffen Pischke. 2009. \emph{Mostly
+Harmless Econometrics: An Empiricist's Companion}. Princeton: Princeton
+University Press.
+
+Bauldry, Shawn. 2015. ``Variation in the Protective Effect of Higher
+Education against Depression.'' \emph{Society and Mental Health} 5(2):
+145--161.
+
+Felson, Jacob. 2014. ``What Can We Learn from Twin Studies? A
+Comprehensive Evaluation of the Equal Environments Assumption.''
+\emph{Social Science Research} 43: 184--199.
+
+Lee, Kristen Schultz, and Yulin Yang. 2022. ``Educational Attainment and
+Emotional Well-Being in Adolescence and Adulthood.'' \emph{SSM - Mental
+Health} 2: 100138.
+
+Lorant, Vincent, Denise Deliège, William Eaton, Alain Robert, Pierre
+Philippot, and Marc Ansseau. 2003. ``Socioeconomic Inequalities in
+Depression: A Meta-Analysis.'' \emph{American Journal of Epidemiology}
+157(2): 98--112.
+
+McFarland, Michael J., and Brandon G. Wagner. 2015. ``Does a College
+Education Reduce Depressive Symptoms in American Young Adults?''
+\emph{Social Science \& Medicine} 146: 75--84.
+
+Mezuk, Briana, John M. Myers, and Kenneth S. Kendler. 2012.
+``Integrating Social Science and Behavioral Genetics: Testing the Origin
+of Socioeconomic Disparities in Depression Using a Genetically Informed
+Design.'' \emph{American Journal of Public Health} 103(S1): S145--S151.
+
+Miech, Richard A., William W. Eaton, and Kerry Brennan. 2005. ``Mental
+Health Disparities across Education and Sex: A Prospective Analysis
+Examining How They Persist over the Life Course.'' \emph{The Journals of
+Gerontology Series B: Psychological Sciences and Social Sciences}
+60(Special Issue 2): S93--S98.
+
+Mirowsky, John, and Catherine E. Ross. 2003. \emph{Education, Social
+Status, and Health}. New York: Aldine de Gruyter.
+
+Quesnel-Vallée, Amélie, and Miles Taylor. 2012. ``Socioeconomic Pathways
+to Depressive Symptoms in Adulthood: Evidence from the National
+Longitudinal Survey of Youth 1979.'' \emph{Social Science \& Medicine}
+74(5): 734--743.
+
+Radloff, Lenore Sawyer. 1977. ``The CES-D Scale: A Self-Report
+Depression Scale for Research in the General Population.'' \emph{Applied
+Psychological Measurement} 1(3): 385--401.
+
+Rosenfield, Sarah, and Dawne Mouzon. 2013. ``Gender and Mental Health.''
+In \emph{Handbook of the Sociology of Mental Health}, edited by Carol S.
+Aneshensel, Jo C. Phelan, and Alex Bierman, 277--296. Dordrecht:
+Springer Netherlands.
+
+Rubin, Donald B. 1987. \emph{Multiple Imputation for Nonresponse in
+Surveys}. New York: John Wiley \& Sons.
+
+\newpage
+
+\section{APPENDICES}\label{appendices}
+
+\subsection{A. Replication Code}\label{a.-replication-code}
+
+All code for data processing, imputation, and analysis is available in
+the GitHub repository for this project:
+
+\url{https://github.com/You-know-who666/ECON398-Final-Report}
+
+The repository contains the following files:
+
+\begin{itemize}
+\item
+  \texttt{data\_loading.R} - Loads raw NLSY97 data
+\item
+  \texttt{data\_processing.R} - Cleans and transforms variables
+\item
+  \texttt{eda.R} - Diagnostic plots and assumption checks
+\item
+  \texttt{analysis.R} - Main regression models and tables
+\item
+  \texttt{report.Rmd} - Complete reproducible paper
+\end{itemize}
+
+\subsection{B. Disclosure of AI Use}\label{b.-disclosure-of-ai-use}
+
+During the preparation of this work, the author used generative AI for
+the following purposes:
+
+\begin{itemize}
+\tightlist
+\item
+  Language polishing and phrase refinement
+\item
+  Formatting assistance for tables and code chunks
+\item
+  Grammar and clarity improvements
+\end{itemize}
+
+After using these tools, the author reviewed and edited the content as
+needed and takes full responsibility for the final version of this
+paper.
+
+\vspace{0.25in}
+
+*Date: \today*
+
+\end{document}

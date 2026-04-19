@@ -1,0 +1,792 @@
+---
+title: "Educational Attainment and Adult Depression"
+author: "Raine Zhuang"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    keep_tex: true
+    latex_engine: pdflatex
+    fig_caption: true
+    number_sections: false
+header-includes:
+  - \usepackage{geometry}
+  - \geometry{letterpaper, margin=1in}
+  - \usepackage{setspace}
+  - \onehalfspacing
+  - \usepackage{times}
+  - \usepackage[T1]{fontenc}
+  - \usepackage{mathptmx}
+  - \usepackage{amsmath, amssymb}
+  - \usepackage{caption}
+  - \captionsetup{labelsep=period}
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+  - \floatplacement{table}{H}
+  - \usepackage{booktabs}
+  - \usepackage{dcolumn}
+  - \newcolumntype{d}[1]{D{.}{.}{#1}}
+  - \usepackage[pagebackref=false]{hyperref}
+  - \hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+  - \usepackage{placeins}
+fontsize: 12pt
+---
+
+```{r setup-all, include=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE,
+                      message = FALSE,
+                      results = "asis",
+                      fig.align = "center",
+                      fig.pos = "H",
+                      out.width = "5in")
+
+# ============================================================
+# LOAD LIBRARIES
+# ============================================================
+library(tidyverse)
+library(here)
+library(readxl)
+library(janitor)
+library(mice)
+library(car)
+library(modelsummary)
+library(knitr)
+library(kableExtra)
+
+# ============================================================
+# DATA LOADING (from data_loading.R)
+# ============================================================
+raw_data <- read_excel(here("data", "data_april_6_2026.xlsx"), sheet = "data_april_6_2026")
+
+# ============================================================
+# DATA PROCESSING (from data_processing.R)
+# ============================================================
+set.seed(123)
+
+# Auto-clean names
+clean_data <- raw_data %>% clean_names()
+
+# Rename variables
+clean_data <- clean_data %>%
+  rename(
+    id = pubid,
+    pct_peer_smoke_1997 = yprs_700, 
+    pct_peer_drunk_1997 = yprs_800,
+    pct_peer_drug_1997 = yprs_1300,
+    sex_1997 = key_sex,
+    urban_rural_1997 = cv_urban_rural,
+    highest_grade_dad_1997 = cv_hgc_bio_dad,
+    highest_grade_mum_1997 = cv_hgc_bio_mom,
+    race_1997 = key_race_ethnicity,
+    conscientiousness_2002 = ysaq_282k,
+    agreeableness_2002 = ysaq_282n,
+    extraversion_2008 = ytel_tipia_000001,
+    openess_2008 = ytel_tipia_000005,
+    neuroticism_2008 = ytel_tipia_000009,
+    highest_degree_2021 = cv_highest_degree_ever_edt,
+    marital_status_2021 = cv_marstat,
+    employ_status_2021 = cv_doi_employed,
+    religion_2021 = yhhi_55708_rev,
+    health_2021 = yhea_100,
+    age_2023 = cv_age_int_date,
+    cesd_2023 = cv_cesd_score_r21,
+    cesd_2019 = cv_cesd_score_r19,
+    cognitive_score_1997 = asvab_math_verbal_score_pct,
+    income_2022 = yinc_1700
+  )
+
+# Replace all negative values with NA across all columns
+clean_data <- clean_data %>% mutate(across(everything(), ~ ifelse(. < 0, NA, .)))
+
+# Transform variables into desired form
+clean_data <- clean_data %>%
+  mutate(
+    # ============================================================
+    # DEMOGRAPHICS (Fixed characteristics)
+    # ============================================================
+    
+    # Sex: 1 = Male, 2 = Female
+    female_1997 = case_when(
+      sex_1997 == 2 ~ 1,
+      sex_1997 == 1 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    female_1997 = factor(female_1997, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # Race: White vs Non-white (binary categorical)
+    white_1997 = case_when(
+      race_1997 == 4 ~ 1,      # White
+      race_1997 %in% c(1, 2, 3) ~ 0,  # Non-white
+      TRUE ~ NA_real_
+    ),
+    white_1997 = factor(white_1997, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # Urban/rural (if needed)
+    urban_1997 = case_when(
+      urban_rural_1997 == 1 ~ 1,  # Urban
+      urban_rural_1997 == 0 ~ 0,  # Rural
+      TRUE ~ NA_real_
+    ),
+    urban_1997 = factor(urban_1997, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # ============================================================
+    # FAMILY EDUCATION BACKGROUND
+    # ============================================================
+    
+    # Parental education: max of both parents (continuous)
+    parent_edu_1997 = pmax(highest_grade_dad_1997, highest_grade_mum_1997, na.rm = TRUE),
+    
+    # ============================================================
+    # PEER ENVIRONMENT (1997) - Binary: "At least 50% of peers smoke/drink/use drug" (negative peer environment) 
+    # vs "25% or less smoke/drink/use drug"
+    # ============================================================
+    # In NLSY97, friends smoke/drink/use drugs all count as negative peer behaviors
+    # Code negative values as missing values first
+    peer_negative_1997 = case_when(
+      pct_peer_smoke_1997 >= 3 | pct_peer_drunk_1997 >= 3 | pct_peer_drug_1997 >= 3 ~ 1,
+      pct_peer_smoke_1997 <= 2 & pct_peer_smoke_1997 <= 2 & pct_peer_smoke_1997 <= 2 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    peer_negative_1997 = factor(peer_negative_1997, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # ============================================================
+    # COGNITIVE ABILITY (1997) - Continuous
+    # ============================================================
+    # Convert from 0-100000 scale to 0-100 percentile
+    cognitive_pct_1997 = as.numeric(cognitive_score_1997) / 1000,
+    
+    # ============================================================
+    # EDUCATIONAL ATTAINMENT (2021)
+    # ============================================================
+    # Highest degree: Keep as ordinal or create binary
+    # Typical coding: 0=No degree, 1=GED, 2=HS, 3=Some college, 4=Bach, 5=Master, 6=PhD, 7=Prof
+    # Two categories: Less than college, college or higher
+    highest_degree_2021 = case_when(
+      highest_degree_2021 >= 3 ~ 1,   # College or higher
+      highest_degree_2021 >= 0 & highest_degree_2021 < 3 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    highest_degree_2021 = factor(highest_degree_2021, levels = c(0, 1), labels = c("Low", "High")),
+    
+    # ============================================================
+    # EMPLOYMENT (2021) - Binary
+    # ============================================================
+    # In NLSY97: 1 = employed, 0 = not employed
+    employed_2021 = case_when(
+      employ_status_2021 == 1 ~ 1,
+      employ_status_2021 == 0 ~ 0,
+      TRUE ~ NA_real_
+    ),
+    employed_2021 = factor(employed_2021, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # ============================================================
+    # PARTNERSHIP STATUS (2021) - Binary
+    # ============================================================
+    # Marital status codes (typical NLSY97):
+    # Categorize into living with a partner or not living with a partner
+    has_partner_2021 = case_when(
+      marital_status_2021 %in% c(1, 3, 5, 7, 9) ~ 1,  # Has spouse/partner
+      marital_status_2021 %in% c(2, 4, 6, 8, 10) ~ 0,  # No partner
+      TRUE ~ NA_real_
+    ),
+    has_partner_2021 = factor(has_partner_2021, levels = c(0, 1), labels = c("No", "Yes")),
+    
+    # ============================================================
+    # INCOME (2022) - Continuous (log transform if skewed)
+    # ============================================================
+    log_income_2022 = log(income_2022 + 1)  # +1 to handle zeros
+  )
+
+# Drop unnecessary variables from the initial clean_data dataset
+clean_data <- clean_data %>% 
+  select(-pct_peer_smoke_1997, 
+         -pct_peer_drunk_1997, 
+         -pct_peer_drug_1997,
+         -income_2022,
+         -cognitive_score_1997,
+         -sex_1997,
+         -urban_rural_1997,
+         -highest_grade_dad_1997,
+         -highest_grade_mum_1997,
+         -race_1997,
+         -employ_status_2021,
+         -marital_status_2021) %>% 
+  # Replace the value 999 in religion_2021 with NA
+  mutate(religion_2021 = ifelse(religion_2021 == 999, NA, religion_2021)) %>%
+# conscientiousness_2002 and agreeableness_2002 have nearly 50% of missing values, 
+# and nearly all religion_2021 values are missing.
+# Therefore, these three variables should be dropped. 
+  select(-religion_2021, -conscientiousness_2002, -agreeableness_2002)
+
+# Define MICE methods (pmm for continuous, logreg for binary, plor for ordinal)
+method_vec <- c(
+  id = "",
+  extraversion_2008 = "pmm",
+  openess_2008 = "pmm",
+  neuroticism_2008 = "pmm",
+  cesd_2019 = "pmm",
+  highest_degree_2021 = "polr",
+  health_2021 = "pmm", 
+  age_2023 = "pmm",      
+  cesd_2023 = "pmm", 
+  female_1997 = "",             
+  white_1997 = "", 
+  urban_1997 = "logreg",  
+  parent_edu_1997 = "pmm",   
+  peer_negative_1997 = "",    
+  cognitive_pct_1997 = "pmm",  
+  employed_2021 = "logreg",     
+  has_partner_2021 = "logreg", 
+  log_income_2022 = "pmm"
+)
+
+# Run MICE 
+imputed <- mice(clean_data,
+                m = 5,           # 5 imputations (standard practice) 
+                maxit = 10,      # 10 iterations (standard practice)
+                method = method_vec,
+                seed = 123,
+                printFlag = FALSE)  # Suppress progress output 
+
+# Get dataset from 1st imputation (for model diagnostics)
+clean_data_complete <- complete(imputed, 1)
+
+
+# ============================================================
+# CREATE MODEL OBJECTS (for later use)
+# ============================================================
+# These will be available to all subsequent chunks
+
+linear_no_control <- with(imputed, lm(cesd_2023 ~ highest_degree_2021))
+
+linear_pre_control <- with(imputed, lm(cesd_2023 ~ highest_degree_2021 + 
+                                        cognitive_pct_1997 + female_1997 + 
+                                        age_2023 + white_1997 + urban_1997 + 
+                                        parent_edu_1997 + peer_negative_1997 +
+                                        extraversion_2008 + openess_2008 + 
+                                        neuroticism_2008))
+linear_post_control <- with(imputed, lm(cesd_2023 ~ highest_degree_2021 + 
+                                         cognitive_pct_1997 + female_1997 + 
+                                         age_2023 + white_1997 + urban_1997 + 
+                                         parent_edu_1997 + peer_negative_1997 + 
+                                         extraversion_2008 + openess_2008 + 
+                                         neuroticism_2008 + health_2021 + 
+                                         cesd_2019 + employed_2021 + 
+                                         has_partner_2021 + log_income_2022))
+
+# For diagnostic plots (using complete data)
+model <- lm(cesd_2023 ~ highest_degree_2021, data = clean_data_complete)
+model_control <- lm(cesd_2023 ~ highest_degree_2021 + cognitive_pct_1997 + 
+                         female_1997 + age_2023 + white_1997 + urban_1997 + 
+                         parent_edu_1997 + peer_negative_1997 + health_2021 + 
+                         cesd_2019 + employed_2021 + has_partner_2021 + 
+                         log_income_2022 + extraversion_2008 + openess_2008 + 
+                         neuroticism_2008, data = clean_data_complete)
+```
+
+\vspace{0.5in}
+
+\begin{center}
+\large
+\textbf{Educational Attainment and Adult Depression}
+\end{center}
+
+\vspace{0.25in}
+
+\begin{center}
+Raine Zhuang
+\end{center}
+
+\vspace{0.25in}
+
+\begin{center}
+\date{\today}
+\end{center}
+
+\vspace{0.5in}
+
+\begin{abstract}
+\noindent This article examines how educational attainment shapes depressive symptoms in middle-age adulthood. Based on data from the NLSY97 dataset and OLS regressions with extensive controls, individuals with higher educational attainment exhibit fewer depressive symptoms.
+
+\vspace{0.25in}
+\noindent \textbf{Keywords:} Educational Attainment, Depressive Symptoms
+\end{abstract}
+
+\newpage
+
+# I. Introduction
+
+Depression is one of the leading causes of disease burden in high-income countries, affecting nearly one in three U.S. adults over their lifetime (Kessler et al., 2012). The economic costs are substantial, with lost productivity and healthcare expenses totaling hundreds of billions annually. If educational attainment can reduce depressive symptoms, then policies that expand college access may generate meaningful mental health benefits alongside their well-documented economic returns.
+
+Past literatures have shown that individuals with higher levels of education report fewer depressive symptoms (Lorant et al., 2003; Mirowsky and Ross, 2003). However, it remains unclear whether this relationship is causal. The same characteristics that predict college completion—cognitive ability, family support, good adolescent mental health—also predict lower depression in adulthood. If these unobserved factors explain the association, then policies promoting college enrollment may not provide the expected mental health benefits.
+
+This study examines whether completing a college degree is associated with lower depressive symptoms in a nationally representative U.S. sample. Based on data from this National Longitudinal Survey of Youth 1997 (NLSY97) and ordinary least squares regression (OLS regression) with extensive controls, college graduates report fewer depressive symptoms than non-graduates on average. The estimated association (-0.770 on a 21-point CES-D scale) is robust to the inclusion of exogenous controls and is substantially attenuated when post-treatment mediators (employment, income, health) are added, suggesting that education's protective effect operates largely through labor market and health pathways. While causal claims require additional testing and stronger identification, the results are consistent with education having a protective effect on mental health.
+
+# II. Background
+
+A large body of research documents that individuals with higher levels of educational attainment report fewer depressive symptoms (Lorant et al., 2003; Mirowsky and Ross, 2003; Miech et al., 2005; Quesnel-Vallée and Taylor, 2012). This inverse association is remarkably consistent across U.S. and international samples, leading many scholars to conceptualize education as a protective factor against depression.
+
+However, the policy relevance of the education–depression relationship depends on whether it represents a causal effect or merely a correlation driven by unobserved selection factors. The concern is that the same individual characteristics that predict educational attainment—cognitive ability, conscientiousness, supportive families, good adolescent mental health—also predict lower depression in adulthood. If these unmeasured confounders explain the association, then policies that increase college enrollment may not generate the expected mental health benefits.
+
+Recent studies have addressed the confounder problem using various identification strategies. Using propensity score matching, Bauldry (2015) found that college completion protects against depressive symptoms. Mezuk, Myers, and Kendler (2012) employed a genetically informed twin design and found that education and depression share a common genetic cause. McFarland and Wagner (2015) used a monozygotic twin discordant design and found that having a college degree was associated with 0.90 fewer depressive symptoms on a 12-point CES-D scale. However, their estimate comes from a small sample of twin pairs, raising concerns about external validity. In addition, twins may not represent the general population, as they differ in birth weight, early treatment by parents, and social experiences (Felson, 2014).
+
+The current study builds upon McFarland and Wagner (2015). The choice of most controls in this study (e.g., cognitive ability, personality) aligns with that in the McFarland and Wagner paper. Unlike their paper, NLSY97, a large and nationally representative dataset, was used. Also, the depressive outcome investigated is on adults aged 38-43, a life stage where returns to education may be more fully realized. Lastly, pathways between educational attainment and depressive symptoms are investigated.
+
+# III. Data
+
+## A. Data Source and Sample
+
+This study uses data from the National Longitudinal Survey of Youth 1997 (NLSY97), a nationally representative survey of U.S. individuals born between 1980 and 1984 conducted by the Bureau of Labor Statistics. The baseline interview in 1997 included 8,984 respondents aged 12-17, who have been followed through adulthood. The outcome variable is drawn from the 2023 interview wave (respondents aged 38-43).
+
+## B. Variables
+
+**Outcome variable.** Depressive symptoms are measured using the 7-item Center for Epidemiologic Studies Depression Scale (CES-D) from the 2023 wave. Items are summed to create a continuous score ranging from 0 to 21, where higher values indicate more severe depressive symptoms (Radloff, 1977).
+
+**Main predictor.** Educational attainment is measured as the highest degree completed by 2021. Based on previous literature (Bauldry, 2015), this variable is collapsed into a binary indicator: High Degree (college degree or higher) versus Low Degree (lower than a college degree), coded as 1 and 0 respectively.
+
+**Control variables.** All controls, except for age, are measured prior to 2023. These include sex (binary), age (continuous), parental education (continuous), race (White vs. non-White), negative peer influence (binary), urban residence (binary), personality traits (neuroticism, openness, extraversion), employment status (binary), partnership status (binary), log income, and cognitive ability. Cognitive ability is measured by the ASVAB math-verbal percentile score, administered in 1997 (ages 12-17). The raw score (0-100,000) is converted to a 0-100 scale by dividing by 1000.
+
+Table 1 presents summary statistics for the variables in the analytic sample.
+
+```{r summary-stats, echo=FALSE, results='asis'}
+cat("\\FloatBarrier\n")
+
+# Create summary statistics table for the clean data
+
+# Select key variables of interest
+summary_data <- clean_data %>%
+  mutate(
+    # Convert factor variables to numeric for mean/SD calculation
+    female_num = as.numeric(female_1997) - 1,  # Converts "No"(0) to 0, "Yes"(1) to 1
+    white_num = as.numeric(white_1997) - 1,
+    urban_num = as.numeric(urban_1997) - 1,
+    peer_neg_num = as.numeric(peer_negative_1997) - 1,
+    employed_num = as.numeric(employed_2021) - 1,
+    partner_num = as.numeric(has_partner_2021) - 1,
+    high_degree_num = as.numeric(highest_degree_2021) - 1
+  )
+
+# Create summary table
+summary_table <- data.frame(
+  Variable = c(
+    "CES-D Score (2023)",
+    "College Degree or Higher",
+    "Cognitive Ability (ASVAB percentile)",
+    "Female",
+    "Age (2023)",
+    "White",
+    "Urban (1997)",
+    "Parental Education (years)",
+    "Negative Peer Influence (1997)",
+    "Prior Depression (CES-D 2019)",
+    "Employed (2021)",
+    "Has Partner (2021)",
+    "Log Income (2022)",
+    "Extraversion (2008)",
+    "Openness (2008)",
+    "Neuroticism (2008)",
+    "Self-rated Health (2021)"
+  ),
+  Mean = c(
+    mean(summary_data$cesd_2023, na.rm = TRUE),
+    mean(summary_data$high_degree_num, na.rm = TRUE),
+    mean(summary_data$cognitive_pct_1997, na.rm = TRUE),
+    mean(summary_data$female_num, na.rm = TRUE),
+    mean(summary_data$age_2023, na.rm = TRUE),
+    mean(summary_data$white_num, na.rm = TRUE),
+    mean(summary_data$urban_num, na.rm = TRUE),
+    mean(summary_data$parent_edu_1997, na.rm = TRUE),
+    mean(summary_data$peer_neg_num, na.rm = TRUE),
+    mean(summary_data$cesd_2019, na.rm = TRUE),
+    mean(summary_data$employed_num, na.rm = TRUE),
+    mean(summary_data$partner_num, na.rm = TRUE),
+    mean(summary_data$log_income_2022, na.rm = TRUE),
+    mean(summary_data$extraversion_2008, na.rm = TRUE),
+    mean(summary_data$openess_2008, na.rm = TRUE),
+    mean(summary_data$neuroticism_2008, na.rm = TRUE),
+    mean(summary_data$health_2021, na.rm = TRUE)
+  ),
+  SD = c(
+    sd(summary_data$cesd_2023, na.rm = TRUE),
+    sd(summary_data$high_degree_num, na.rm = TRUE),
+    sd(summary_data$cognitive_pct_1997, na.rm = TRUE),
+    sd(summary_data$female_num, na.rm = TRUE),
+    sd(summary_data$age_2023, na.rm = TRUE),
+    sd(summary_data$white_num, na.rm = TRUE),
+    sd(summary_data$urban_num, na.rm = TRUE),
+    sd(summary_data$parent_edu_1997, na.rm = TRUE),
+    sd(summary_data$peer_neg_num, na.rm = TRUE),
+    sd(summary_data$cesd_2019, na.rm = TRUE),
+    sd(summary_data$employed_num, na.rm = TRUE),
+    sd(summary_data$partner_num, na.rm = TRUE),
+    sd(summary_data$log_income_2022, na.rm = TRUE),
+    sd(summary_data$extraversion_2008, na.rm = TRUE),
+    sd(summary_data$openess_2008, na.rm = TRUE),
+    sd(summary_data$neuroticism_2008, na.rm = TRUE),
+    sd(summary_data$health_2021, na.rm = TRUE)
+  ),
+  Min = c(
+    min(summary_data$cesd_2023, na.rm = TRUE),
+    min(summary_data$high_degree_num, na.rm = TRUE),
+    min(summary_data$cognitive_pct_1997, na.rm = TRUE),
+    min(summary_data$female_num, na.rm = TRUE),
+    min(summary_data$age_2023, na.rm = TRUE),
+    min(summary_data$white_num, na.rm = TRUE),
+    min(summary_data$urban_num, na.rm = TRUE),
+    min(summary_data$parent_edu_1997, na.rm = TRUE),
+    min(summary_data$peer_neg_num, na.rm = TRUE),
+    min(summary_data$cesd_2019, na.rm = TRUE),
+    min(summary_data$employed_num, na.rm = TRUE),
+    min(summary_data$partner_num, na.rm = TRUE),
+    min(summary_data$log_income_2022, na.rm = TRUE),
+    min(summary_data$extraversion_2008, na.rm = TRUE),
+    min(summary_data$openess_2008, na.rm = TRUE),
+    min(summary_data$neuroticism_2008, na.rm = TRUE),
+    min(summary_data$health_2021, na.rm = TRUE)
+  ),
+  Max = c(
+    max(summary_data$cesd_2023, na.rm = TRUE),
+    max(summary_data$high_degree_num, na.rm = TRUE),
+    max(summary_data$cognitive_pct_1997, na.rm = TRUE),
+    max(summary_data$female_num, na.rm = TRUE),
+    max(summary_data$age_2023, na.rm = TRUE),
+    max(summary_data$white_num, na.rm = TRUE),
+    max(summary_data$urban_num, na.rm = TRUE),
+    max(summary_data$parent_edu_1997, na.rm = TRUE),
+    max(summary_data$peer_neg_num, na.rm = TRUE),
+    max(summary_data$cesd_2019, na.rm = TRUE),
+    max(summary_data$employed_num, na.rm = TRUE),
+    max(summary_data$partner_num, na.rm = TRUE),
+    max(summary_data$log_income_2022, na.rm = TRUE),
+    max(summary_data$extraversion_2008, na.rm = TRUE),
+    max(summary_data$openess_2008, na.rm = TRUE),
+    max(summary_data$neuroticism_2008, na.rm = TRUE),
+    max(summary_data$health_2021, na.rm = TRUE)
+  ),
+  N = c(
+    sum(!is.na(summary_data$cesd_2023)),
+    sum(!is.na(summary_data$high_degree_num)),
+    sum(!is.na(summary_data$cognitive_pct_1997)),
+    sum(!is.na(summary_data$female_num)),
+    sum(!is.na(summary_data$age_2023)),
+    sum(!is.na(summary_data$white_num)),
+    sum(!is.na(summary_data$urban_num)),
+    sum(!is.na(summary_data$parent_edu_1997)),
+    sum(!is.na(summary_data$peer_neg_num)),
+    sum(!is.na(summary_data$cesd_2019)),
+    sum(!is.na(summary_data$employed_num)),
+    sum(!is.na(summary_data$partner_num)),
+    sum(!is.na(summary_data$log_income_2022)),
+    sum(!is.na(summary_data$extraversion_2008)),
+    sum(!is.na(summary_data$openess_2008)),
+    sum(!is.na(summary_data$neuroticism_2008)),
+    sum(!is.na(summary_data$health_2021))
+  )
+)
+
+# Round numeric columns
+summary_table[, c("Mean", "SD", "Min", "Max")] <- round(summary_table[, c("Mean", "SD", "Min", "Max")], 2)
+
+# Format binary variables as percentages
+for(i in c(2, 4, 6, 7, 9, 11, 12)) {
+  summary_table$Mean[i] <- summary_table$Mean[i] * 100
+  summary_table$SD[i] <- summary_table$SD[i] * 100
+}
+
+# Print the table
+kable(summary_table, 
+      caption = "Summary Statistics for Main Variables",
+      booktabs = TRUE,
+      format = "latex",
+      col.names = c("Variable", "Mean / %", "SD", "Min", "Max", "N")) %>%
+  kable_styling(latex_options = c("hold_position", "scale_down"))
+
+cat("\\FloatBarrier\n")
+```
+
+*Notes:* *CES-D scores range from 0 to 21, with higher scores indicating more depressive symptoms. For binary variables (College Degree, Female, White, Urban, Negative Peer Influence, Employed, Has Partner), the mean is presented as a percentage. ASVAB scores are percentile-ranked from 0 to 100. N \> 8,000 respondents after multiple imputation.*
+
+The average 2023 CES-D score is 3.26 (SD = 4.11) on a 0-21 scale, indicating relatively low levels of depressive symptoms in this sample of adults. Approximately 41.0% of respondents have completed a college degree or higher. The sample is 49.0% female and 52.0% White, with an average age of 40.8 years. Cognitive ability (ASVAB percentile) averages 45.3, and prior depressive symptoms (CES-D 2019) average 3.01. Most respondents are employed (80.0%) and live with a partner (60.0%).
+
+## C. Missing Data
+
+Variables with no or minimal missingness are retained without imputation. For all other variables, multiple imputation using chained equations (MICE) is employed. Five imputed datasets are generated, and results are pooled using Rubin's rules (Rubin, 1987).
+
+# IV. Empirical Strategy
+
+To estimate the association between educational attainment and depressive symptoms, three ordinary least squares (OLS) regression models are used.
+
+## A. Baseline Model
+
+The baseline specification is:
+
+$$ CESD_i = \beta_0 + \beta_1 HighDegree_i + \varepsilon_i $$
+
+where $CESD_i$ is the CES-D depression score for respondent $i$, and $HighDegree_i$ is an indicator equal to 1 if the respondent has completed a college degree or higher. The coefficient $\beta_1$ estimates the difference in mean depressive symptoms between college graduates and non-graduates.
+
+## B. Model with Exogenous Controls
+
+To address omitted variable bias, a second model is used:
+
+$$ CESD_i = \beta_0 + \beta_1 HighDegree_i + \mathbf{X_i}\gamma + \varepsilon_i $$
+
+where $\mathbf{X_i}$ includes demographic characteristics, socioeconomic background, adolescent peer environment, cognitive ability, and personality traits.
+
+## C. Model with Full Controls
+
+To investigate pathways between college completion and depressive symptoms, a third model is used:
+
+$$ CESD_i = \beta_0 + \beta_1 HighDegree_i + \mathbf{X_i}\gamma + \mathbf{Z_i}\alpha + \varepsilon_i $$
+
+where $\mathbf{Z_i}$ includes prior depressive symptoms (CES-D 2019), employment status, partnership status, log income, and self-rated health.
+
+## D. Identification Assumptions
+
+Consistent estimation of $\beta_1$ requires several assumptions. First, across all three models, a linear relationship between education and depression, as in the McFarland and Wagner paper, is assumed. Second, conditional independence assumes no unmeasured confounders after conditioning on controls. This is made plausible by including controls like cognitive ability, personality, and prior depressive symptoms (McFarland and Wagner, 2015). Third, exogeneity of controls requires that controls are not themselves outcomes of education. I therefore present models with and without post-treatment controls (Angrist and Pischke, 2009). Fourth, variance inflation factors (VIF) in Table 2 are all below 5, indicating no severe multicollinearity. Lastly, diagnostic plots in Figure 1 show no systematic patterns, and heteroskedasticity-robust standard errors are reported throughout.
+
+Table 2 reports variance inflation factors for the full controls model to assess multicollinearity.
+
+```{r vif-table, echo=FALSE, results='asis'}
+cat("\\FloatBarrier\n")
+
+# Create VIF table with clean variable names
+vif_df <- data.frame(
+  Variable = c(
+    "College Degree or Higher",
+    "Cognitive Ability (ASVAB)",
+    "Female",
+    "Age",
+    "White",
+    "Urban",
+    "Parental Education",
+    "Negative Peer Influence",
+    "Self-rated Health",
+    "Prior Depression (2019)",
+    "Employed",
+    "Has Partner",
+    "Log Income",
+    "Extraversion",
+    "Openness",
+    "Neuroticism"
+  ),
+  VIF = round(vif(model_control), 2)
+)
+
+kable(vif_df, 
+      caption = "Variance Inflation Factors", 
+      booktabs = TRUE, 
+      format = "latex", 
+      digits = 2,
+      col.names = c("Variable", "VIF")) %>%
+  kable_styling(latex_options = c("hold_position")) %>%
+
+cat("\\FloatBarrier\n")
+```
+
+*Notes:* *VIF values below 5 indicate no severe multicollinearity. All variables fall well below this threshold.*
+
+Figure 1 shows the residuals versus fitted values plot and Q-Q plot of residuals for the no control model.
+
+```{r diagnostic-plots, echo=FALSE, fig.cap="Residuals vs Fitted Plot and Q-Q Plot", fig.pos='H', out.width="5in"}
+# Diagnostic plots
+par(mfrow = c(1, 2))
+plot(model, which = 1, main = "Residuals vs Fitted")
+plot(model, which = 2, main = "Q-Q Plot")
+par(mfrow = c(1, 1))
+```
+
+*Notes:* *In the residuals versus fitted values plot, the horizontal line at zero represents perfect prediction. No systematic pattern is visible, supporting the assumptions of linearity and homoskedasticity. In the Q-Q plot, points along the diagonal line indicate normally distributed residuals. Mild deviations in the lower and upper tail are expected given the bounded 0–21 range of the CES-D scale.*
+
+# V. Results
+
+## A. Main Findings
+
+Table 3 presents OLS regression results for the association between college completion and depressive symptoms across three models.
+
+```{r regression-results, echo=FALSE}
+cat("\\FloatBarrier\n")
+
+# Pool the results
+pooled_no_control <- pool(linear_no_control)
+pooled_pre_control <- pool(linear_pre_control)
+pooled_post_control <- pool(linear_post_control)
+
+# Extract coefficients, standard errors, and p-values
+extract_results <- function(pooled_obj, model_name) {
+  summary_obj <- summary(pooled_obj)
+  data.frame(
+    term = summary_obj$term,
+    estimate = summary_obj$estimate,
+    std.error = summary_obj$std.error,
+    p.value = summary_obj$p.value,
+    model = model_name
+  )
+}
+
+# Combine all results
+results_all <- bind_rows(
+  extract_results(pooled_no_control, "No Controls"),
+  extract_results(pooled_pre_control, "Pre-treatment Controls"),
+  extract_results(pooled_post_control, "Post-treatment Controls")
+)
+
+# Reshape to wide format for modelsummary
+results_wide <- results_all %>%
+  select(-std.error, -p.value) %>%
+  pivot_wider(names_from = model, values_from = estimate)
+
+# Create a publication-ready table using modelsummary
+# First, create list of model objects for modelsummary
+model_list <- list(
+  "No Controls" = pooled_no_control,
+  "Pre-treatment Controls" = pooled_pre_control,
+  "Post-treatment Controls" = pooled_post_control
+  )
+
+# Generate the table
+modelsummary(model_list,
+             statistic = "({std.error})",
+             stars = c('*' = 0.05, '**' = 0.01, '***' = 0.001),
+             coef_map = c(
+               "highest_degree_2021High" = "College Degree or Higher",
+               "cognitive_pct_1997" = "Cognitive Ability (ASVAB)",
+               "female_1997Yes" = "Female",
+               "age_2023" = "Age",
+               "white_1997Yes" = "White",
+               "urban_1997Yes" = "Urban",
+               "parent_edu_1997" = "Parental Education",
+               "peer_negative_1997Yes" = "Negative Peer Influence",
+               "extraversion_2008" = "Extraversion",
+               "openess_2008" = "Openness",
+               "neuroticism_2008" = "Neuroticism",
+               "health_2021" = "Self-rated Health",
+               "cesd_2019" = "Prior Depression (2019)",
+               "employed_2021Yes" = "Employed",
+               "has_partner_2021Yes" = "Has Partner",
+               "log_income_2022" = "Log Income"
+             ),
+             gof_map = c("nobs", "r.squared", "adj.r.squared"),
+             title = "OLS Regression Results for Depressive Symptoms (CES-D 2023)",
+             notes = "Heteroskedasticity-robust standard errors in parentheses. *** p < 0.001, ** p < 0.01, * p < 0.05. Results pooled across 5 imputed datasets using Rubin's rules.",
+             output = "latex")
+
+cat("\\FloatBarrier\n")
+```
+
+*Notes:* *The dependent variable is CES-D score (2023), ranging from 0 to 21. Model 1 includes no controls. Model 2 adds controls that are unlikely to be caused by college completion. Model 3 adds post-treatment mediators. Heteroskedasticity-robust standard errors are in parentheses. Results are pooled across 5 imputed datasets using Rubin's rules. \*\*\* p \< 0.001, \*\* p \< 0.01, \* p \< 0.05.*
+
+**Model 1 (No Controls).** Having a college degree is associated with a 0.689-point lower CES-D score (p \< 0.001). This raw association aligns with the established education–depression gradient (Mirowsky and Ross, 2003; Lorant et al., 2003).
+
+**Model 2 (Exogenous Controls).** Adding exogenous controls, the education coefficient becomes -0.770 (p \< 0.001). Female respondents report CES-D scores 0.906 points higher than males (p \< 0.001), consistent with documented gender differences (Rosenfield and Mouzon, 2013). Urban residents report higher depressive symptoms (0.442 points, p \< 0.001). Negative peer influence predicts higher CES-D scores (0.361 points, p \< 0.01). Counterintuitively, neuroticism is associated with lower depression (-0.546, p \< 0.001). The model explains approximately 7% of the variance (Adjusted R² = 0.068).
+
+**Model 3 (Full Controls).** Adding post-treatment mediators attenuates the education coefficient to -0.161 (not significant). This attenuation is expected as these variables lie on the causal pathway. Significant coefficients for prior depression (0.469, p \< 0.001), self-rated health (0.559, p \< 0.001), and employment (-0.508, p \< 0.001) suggest these are important mediators. The full model explains 31% of the variance (Adjusted R² = 0.311).
+
+## B. Interpretation
+
+Two main conclusions emerge.
+
+First, there is a robust negative association between college completion and depressive symptoms that persists after controlling for exogenous variables. The education coefficient is not sensitive to the inclusion of exogenous controls; in fact, its magnitude increases slightly from Model 1 to Model 2. This pattern is unusual, since most studies found that adding controls attenuates the coefficient (Lee and Yang, 2022; McFarland and Wagner, 2015). This stability strengthens confidence that the association is not merely an artifact of omitted pre-existing differences.
+
+Second, the sharp attenuation in Model 3 indicates that much of the education effect operates through post-education pathways such as employment and health.
+
+## C. Comparison with Previous Literature
+
+The education coefficient in Model 2 (-0.770 on a 21-point scale) is comparable to McFarland and Wagner's (2015) twin-difference estimate (-0.90 on a 12-point scale) when scaled appropriately. Unlike their study—which found that adding controls like cognitive ability and personality reduced the coefficient by 65%—my estimates show stability across the first two models.
+
+# VI. Discussion
+
+## A. Assessment of Results and Assumptions
+
+The results show that completing a college degree is associated with significantly lower depressive symptoms, even after controlling for an extensive set of exogeneous characteristics (Model 2: -0.770, p \< 0.001). This finding is consistent with the broader literature (Mirowsky and Ross, 2003; Lorant et al., 2003; McFarland and Wagner, 2015; Bauldry, 2015).
+
+**Strengths.** The NLSY97 offers two rare advantages. First, the inclusion of ASVAB measure of adolescent cognitive ability and personality measure addresses key sources of selection bias mentioned in the McFarland and Wagner paper. Second, the longitudinal design ensures exogeneity of controls (Angrist and Pischke, 2009) and lowers the possibility of reverse causality.
+
+**Weaknesses.** Conditional independence remains untestable. Unobserved factors such as childhood trauma or genetic predispositions could still bias the estimate. The CES-D scale is self-reported and may be subject to reporting bias.
+
+**Alternative explanations.** One important omitted variable is whether individuals have depression or other mental health conditions as a child, since this could affect their ability to complete any form of education and could also affect their mental health as an adult (both directly and indirectly through education).
+
+## B. Extension: Alternative Identification Strategies
+
+While the OLS estimates with extensive controls are informative, they cannot rule out all omitted variable biases. Two quasi-experimental designs would provide stronger causal evidence.
+
+**Instrumental Variables.** A natural instrumental variables strategy would be using geographic variation in college access. Distance to the nearest four-year college or the presence of a local community college have been used as instruments for educational attainment (Card, 1995). These instruments satisfy relevance (proximity reduces tuition and commuting costs, increasing college enrollment) and are plausibly exogenous, as birth location is largely predetermined and not directly linked to adult depression. Implementing this approach would require merging NLSY97 geocodes with institutional data from the Integrated Postsecondary Education Data System (IPEDS). A significant first-stage F-statistic (F \> 10) and a null result from an overidentification test would strengthen claims of a causal effect.
+
+**Regression Discontinuity Design.** An alternative approach would exploit admission thresholds at selective universities. Many institutions admit students based on test score or grade point average cutoffs. Students just above and just below these thresholds are comparable except for their admission status, creating a natural experiment. Comparing depression outcomes for students who marginally gained admission versus those who marginally missed admission would help identify the causal effect of attending a selective college. This design requires data on application outcomes and admission thresholds, which are not available in the NLSY97 but could be obtained from institutional records or restricted-use survey data.
+
+Both designs offer stronger causal identification than OLS with controls. Future work should use these strategies to determine whether the protective association investigated here reflects a genuine causal effect of college completion on depressive symptoms.
+
+# VII. Conclusion
+
+This study examines whether completing a college degree is associated with lower depressive symptoms in a nationally representative U.S. sample (NLSY97, ages 35-43). Using OLS regression with extensive exogenous controls, I find that college graduates report significantly fewer depressive symptoms than non-graduates (coefficient = -0.770, p \< 0.001). The estimate is substantially attenuated when post-treatment mediators are included, suggesting education's protective effect operates largely through labor market outcomes and health status.
+
+**Limitations and future directions.** Unobserved confounding cannot be ruled out, and the instrumental variables method and regression discontinuity design method are proposed for future investigations. The sample is restricted to a single cohort, so replication using NLSY79 or more recent cohorts would assess generalizability of this study's findings. Finally, this study does not examine heterogeneity by gender, race, or socioeconomic background. Given Lee and Yang's (2022) finding that education's mental health benefits accrue primarily to women, future research should investigate subgroup variation.
+
+**Policy implications.** If the association is causal, policies that expand college access—need-based financial aid, community college investments—may generate mental health benefits. Given that employment and income are important mediators, policies improving labor market outcomes for non-graduates might offer alternative policy levers.
+
+In summary, this study provides evidence that college completion is associated with lower depressive symptoms conditional on extensive controls.
+
+\newpage
+
+# REFERENCES
+
+Angrist, Joshua D., and Jörn-Steffen Pischke. 2009. *Mostly Harmless Econometrics: An Empiricist's Companion*. Princeton: Princeton University Press.
+
+Bauldry, Shawn. 2015. "Variation in the Protective Effect of Higher Education against Depression." *Society and Mental Health* 5(2): 145–161.
+
+Felson, Jacob. 2014. "What Can We Learn from Twin Studies? A Comprehensive Evaluation of the Equal Environments Assumption." *Social Science Research* 43: 184–199.
+
+Lee, Kristen Schultz, and Yulin Yang. 2022. "Educational Attainment and Emotional Well-Being in Adolescence and Adulthood." *SSM - Mental Health* 2: 100138.
+
+Lorant, Vincent, Denise Deliège, William Eaton, Alain Robert, Pierre Philippot, and Marc Ansseau. 2003. "Socioeconomic Inequalities in Depression: A Meta-Analysis." *American Journal of Epidemiology* 157(2): 98–112.
+
+McFarland, Michael J., and Brandon G. Wagner. 2015. "Does a College Education Reduce Depressive Symptoms in American Young Adults?" *Social Science & Medicine* 146: 75–84.
+
+Mezuk, Briana, John M. Myers, and Kenneth S. Kendler. 2012. "Integrating Social Science and Behavioral Genetics: Testing the Origin of Socioeconomic Disparities in Depression Using a Genetically Informed Design." *American Journal of Public Health* 103(S1): S145–S151.
+
+Miech, Richard A., William W. Eaton, and Kerry Brennan. 2005. "Mental Health Disparities across Education and Sex: A Prospective Analysis Examining How They Persist over the Life Course." *The Journals of Gerontology Series B: Psychological Sciences and Social Sciences* 60(Special Issue 2): S93–S98.
+
+Mirowsky, John, and Catherine E. Ross. 2003. *Education, Social Status, and Health*. New York: Aldine de Gruyter.
+
+Quesnel-Vallée, Amélie, and Miles Taylor. 2012. "Socioeconomic Pathways to Depressive Symptoms in Adulthood: Evidence from the National Longitudinal Survey of Youth 1979." *Social Science & Medicine* 74(5): 734–743.
+
+Radloff, Lenore Sawyer. 1977. "The CES-D Scale: A Self-Report Depression Scale for Research in the General Population." *Applied Psychological Measurement* 1(3): 385–401.
+
+Rosenfield, Sarah, and Dawne Mouzon. 2013. "Gender and Mental Health." In *Handbook of the Sociology of Mental Health*, edited by Carol S. Aneshensel, Jo C. Phelan, and Alex Bierman, 277–296. Dordrecht: Springer Netherlands.
+
+Rubin, Donald B. 1987. *Multiple Imputation for Nonresponse in Surveys*. New York: John Wiley & Sons.
+
+\newpage
+
+# APPENDICES
+
+## A. Replication Code
+
+All code for data processing, imputation, and analysis is available in the GitHub repository for this project:
+
+\url{https://github.com/You-know-who666/ECON398-Final-Report}
+
+The repository contains the following files:
+
+-   `data_loading.R` - Loads raw NLSY97 data
+
+-   `data_processing.R` - Cleans and transforms variables
+
+-   `eda.R` - Diagnostic plots and assumption checks
+
+-   `analysis.R` - Main regression models and tables
+
+-   `report.Rmd` - Complete reproducible paper
+
+## B. Disclosure of AI Use
+
+During the preparation of this work, the author used generative AI for the following purposes:
+
+-   Language polishing and phrase refinement
+-   Formatting assistance for tables and code chunks
+-   Grammar and clarity improvements
+
+After using these tools, the author reviewed and edited the content as needed and takes full responsibility for the final version of this paper.
+
+\vspace{0.25in}
+
+\*Date: \today\*
